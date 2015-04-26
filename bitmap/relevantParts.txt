@@ -1,0 +1,146 @@
+   std::string    file_name_;
+   unsigned char* data_;
+   unsigned int   length_;
+   unsigned int   width_;
+   unsigned int   height_;
+   unsigned int   row_increment_;
+   unsigned int   bytes_per_pixel_;
+   channel_mode   channel_mode_;   
+
+   enum channel_mode {
+                        rgb_mode = 0,
+                        bgr_mode = 1
+                     };
+
+bitmap_image(const std::string& filename)
+   : file_name_(filename),
+     data_  (0),
+     length_(0),
+     width_ (0),
+     height_(0),
+     row_increment_(0),
+     bytes_per_pixel_(0),
+     channel_mode_(bgr_mode)
+   {
+      load_bitmap();
+   }
+
+void load_bitmap()
+   {
+      std::ifstream stream(file_name_.c_str(),std::ios::binary);
+
+      if (!stream)
+      {
+         std::cerr << "bitmap_image::load_bitmap() ERROR: bitmap_image - file " << file_name_ << " not found!" << std::endl;
+         return;
+      }
+
+      bitmap_file_header bfh;
+      bitmap_information_header bih;
+
+      read_bfh(stream,bfh);
+      read_bih(stream,bih);
+
+      if (bfh.type != 19778)
+      {
+         stream.close();
+         std::cerr << "bitmap_image::load_bitmap() ERROR: bitmap_image - Invalid type value " << bfh.type << " expected 19778." << std::endl;
+         return;
+      }
+
+      if (bih.bit_count != 24)
+      {
+         stream.close();
+         std::cerr << "bitmap_image::load_bitmap() ERROR: bitmap_image - Invalid bit depth " << bih.bit_count << " expected 24." << std::endl;
+
+         return;
+      }
+
+      height_ = bih.height;
+      width_  = bih.width;
+
+      bytes_per_pixel_ = bih.bit_count >> 3;
+
+      unsigned int padding = (4 - ((3 * width_) % 4)) % 4;
+      char padding_data[4] = {0,0,0,0};
+
+      create_bitmap();
+
+      for (unsigned int i = 0; i < height_; ++i)
+      {
+         unsigned char* data_ptr = row(height_ - i - 1); // read in inverted row order
+
+         stream.read(reinterpret_cast<char*>(data_ptr),sizeof(char) * bytes_per_pixel_ * width_);
+         stream.read(padding_data,padding);
+      }
+   }
+
+
+
+      struct bitmap_file_header
+   {
+      unsigned short type;
+      unsigned int   size;
+      unsigned short reserved1;
+      unsigned short reserved2;
+      unsigned int   off_bits;
+
+      unsigned int struct_size()
+      {
+         return sizeof(type)      +
+                sizeof(size)      +
+                sizeof(reserved1) +
+                sizeof(reserved2) +
+                sizeof(off_bits);
+      }
+   };
+
+
+
+   struct bitmap_information_header
+   {
+      unsigned int   size;
+      unsigned int   width;
+      unsigned int   height;
+      unsigned short planes;
+      unsigned short bit_count;
+      unsigned int   compression;
+      unsigned int   size_image;
+      unsigned int   x_pels_per_meter;
+      unsigned int   y_pels_per_meter;
+      unsigned int   clr_used;
+      unsigned int   clr_important;
+
+      unsigned int struct_size()
+      {
+         return sizeof(size)             +
+                sizeof(width)            +
+                sizeof(height)           +
+                sizeof(planes)           +
+                sizeof(bit_count)        +
+                sizeof(compression)      +
+                sizeof(size_image)       +
+                sizeof(x_pels_per_meter) +
+                sizeof(y_pels_per_meter) +
+                sizeof(clr_used)         +
+                sizeof(clr_important);
+      }
+   };
+
+   inline void read_bfh(std::ifstream& stream, bitmap_file_header& bfh)
+   {
+      read_from_stream(stream,bfh.type);
+      read_from_stream(stream,bfh.size);
+      read_from_stream(stream,bfh.reserved1);
+      read_from_stream(stream,bfh.reserved2);
+      read_from_stream(stream,bfh.off_bits);
+
+      if (big_endian())
+      {
+         bfh.type      = flip(bfh.type);
+         bfh.size      = flip(bfh.size);
+         bfh.reserved1 = flip(bfh.reserved1);
+         bfh.reserved2 = flip(bfh.reserved2);
+         bfh.off_bits  = flip(bfh.off_bits);
+      }
+   }
